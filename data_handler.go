@@ -8,12 +8,10 @@ import (
 	"strings"
 )
 
-const path = "/Users/andrew/go/src/github.com/zoomie/puffadder/data.puff"
-
 // SetValue inputs the value into the .puff file
-func SetValue(key, value string) {
+func setValue(key, value string) {
 	var err error
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(dataPath, os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		fmt.Println("opening file", err)
 	}
@@ -24,8 +22,8 @@ func SetValue(key, value string) {
 }
 
 // GetValue retrives the value from the .puff file
-func GetValue(key string) string {
-	file, err := os.Open(path)
+func getValue(key string) string {
+	file, err := os.Open(dataPath)
 	if err != nil {
 		log.Fatal(err)
 	}
