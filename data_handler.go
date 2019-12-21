@@ -8,9 +8,11 @@ import (
 	"strings"
 )
 
-func setValue(key, value string) {
+const path = "/Users/andrew/go/src/github.com/zoomie/puffadder/data.puff"
+
+// SetValue inputs the value into the .puff file
+func SetValue(key, value string) {
 	var err error
-	path := "/Users/andrew/work/puffadder/data.puff"
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		fmt.Println("opening file", err)
@@ -21,8 +23,8 @@ func setValue(key, value string) {
 	}
 }
 
-func getValue(key string) string {
-	path := "/Users/andrew/work/puffadder/data.puff"
+// GetValue retrives the value from the .puff file
+func GetValue(key string) string {
 	file, err := os.Open(path)
 	if err != nil {
 		log.Fatal(err)
@@ -39,17 +41,4 @@ func getValue(key string) string {
 		}
 	}
 	return value
-}
-
-func main() {
-	operation := os.Args[1]
-	key := os.Args[2]
-	if operation == "get" {
-		fmt.Println(getValue(key))
-	} else if operation == "set" {
-		value := os.Args[3]
-		setValue(key, value)
-	} else {
-		fmt.Println("Incorrect operation")
-	}
 }
