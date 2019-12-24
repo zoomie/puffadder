@@ -35,6 +35,7 @@ func initCheckDataFileExists() {
 
 func initLoadInMemoryMapping() {
 	file, _ := os.Open(dataPath)
+	defer file.Close()
 	scanner := bufio.NewScanner(file)
 	nameToOffset = make(map[string]int64)
 	var currentOffset int64 = 0
@@ -66,6 +67,9 @@ func decodeLine(raw string) (string, int) {
 }
 func readAtByteOffset(offset int64) string {
 	file, _ := os.Open(dataPath)
+	// should you check err before calling defer.Close()
+	// what if the file open fails, would defer.Close fail?
+	defer file.Close()
 	var whence int = 0 // read from start of file
 	_, err := file.Seek(offset, whence)
 	if err != nil {
@@ -79,10 +83,11 @@ func readAtByteOffset(offset int64) string {
 	return line
 }
 
-func getAmount(key string) int {
-	offset, ok := nameToOffset[key]
+func getAmount(name string) int {
+	offset, ok := nameToOffset[name]
 	if !ok {
 		fmt.Println("Perons does not exist in db")
+		// should I push this error up of handle it here?
 		return 0
 	}
 	line := readAtByteOffset(offset)
@@ -90,28 +95,11 @@ func getAmount(key string) int {
 	return amount
 }
 
-func writeAtByteOffset(raw string, offset int64) {
-	// Not currently working
-	// the writer is not actually writing to file at the offset.
-
-	// file, _ := os.Create(dataPath) //, os.O_WRONLY, os.ModeExclusive)
-	// whence := 0
-	// _, err := file.Seek(offset, whence) // add error handling
-	// if err != nil {
-	// 	fmt.Println(err)
-	// }
-	// writer := bufio.NewWriter(file)
-	// // rawBytes := []byte(raw)
-	// nn, err := writer.WriteString(raw)
-	// if err != nil {
-	// 	fmt.Println(err, nn)
-	// } else {
-	// 	fmt.Println("saved data to file")
-	// }
-}
-func appendAmountToData(raw string){
+func appendAmountToData(raw string) int64{
 	var err error
 	file, err := os.OpenFile(dataPath, os.O_APPEND|os.O_WRONLY, 0644)
+	defer file.Close()
+	// need to read what is the best practise for handling errors
 	if err != nil {
 		fmt.Println("opening file", err)
 	}
@@ -119,17 +107,17 @@ func appendAmountToData(raw string){
 	if err != nil {
 		fmt.Println("writing file", err)
 	}
+	fileInto, err := file.Stat()
+	if err != nil {
+		fmt.Println(err)
+	}
+	// could also keep track of file size with a var
+	size := fileInto.Size()
+	return size
 }
 
 func setAmount(name, amount string) {
-	offset, ok := nameToOffset[name]
 	raw := encodeLine(name, amount)
-	if ok {
-		// update the key in place
-		// writeAtByteOffset(raw, offset)
-		fmt.Println("TOTO:", offset)
-	} else {
-		// append the key to file
-		appendAmountToData(raw)
-	}
+	endOfFileOffset := appendAmountToData(raw)
+	nameToOffset[name] = endOfFileOffset
 }
