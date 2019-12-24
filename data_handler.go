@@ -2,7 +2,9 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path"
 	"strconv"
@@ -13,20 +15,22 @@ const splitToken = ":"
 const namePadding = "-"
 const lineOffSet = 22
 const nameMaxLength = 10
-// add maxInt size
 
 var dataPath string
 var nameToOffset map[string]int64
 
 func initCheckDataFileExists() {
-	workingDir, _ := os.Getwd()
+	workingDir, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
 	dataPath = path.Join(workingDir, "data.puff")
 	if _, err := os.Stat(dataPath); err == nil {
 		fmt.Println("Data path exists at: ", dataPath)
 	} else {
 		_, err := os.Create(dataPath)
 		if err != nil {
-			fmt.Println(err)
+			panic(fmt.Errorf("Could not create data file: %w", err))
 		} else {
 			fmt.Println("Data path created at:", dataPath)
 		}
@@ -41,7 +45,10 @@ func initLoadInMemoryMapping() {
 	var currentOffset int64 = 0
 	for scanner.Scan() {
 		line := scanner.Text()
-		name, _ := decodeLine(line)
+		name, _, err := decodeLine(line)
+		if err != nil {
+			panic(fmt.Errorf("data file corrupt: %w", err))
+		}
 		nameToOffset[name] = currentOffset
 		currentOffset += lineOffSet
 	}
@@ -52,18 +59,24 @@ func init() {
 	initLoadInMemoryMapping()
 }
 
-func encodeLine(name string, number string) string {
+func encodeLine(name string, number string) (string, error) {
+	if len(name) > 10 {
+		return "", errors.New("name too long")
+	}
 	namePadded := name + strings.Repeat(namePadding, 10-len(name))
 	numberPadded := strings.Repeat(namePadding, 10-len(number)) + number
-	return namePadded + splitToken + numberPadded
+	return namePadded + splitToken + numberPadded, nil
 }
 
-func decodeLine(raw string) (string, int) {
+func decodeLine(raw string) (string, int, error) {
 	splitRaw := strings.Split(raw, splitToken)
 	name := strings.Trim(splitRaw[0], namePadding)
 	amountString := strings.Trim(splitRaw[1], namePadding)
-	amount, _ := strconv.Atoi(amountString)
-	return name, amount
+	amount, err := strconv.Atoi(amountString)
+	if err != nil {
+		return "", 0, fmt.Errorf("could not decode line: %w", err)
+	}
+	return name, amount, nil
 }
 func readAtByteOffset(offset int64) string {
 	file, _ := os.Open(dataPath)
@@ -83,41 +96,57 @@ func readAtByteOffset(offset int64) string {
 	return line
 }
 
-func getAmount(name string) int {
+func getAmount(name string) (int, error) {
 	offset, ok := nameToOffset[name]
 	if !ok {
-		fmt.Println("Perons does not exist in db")
 		// should I push this error up of handle it here?
-		return 0
+		return 0, errors.New("name not in db")
 	}
 	line := readAtByteOffset(offset)
-	_, amount := decodeLine(line)
-	return amount
+	_, amount, err := decodeLine(line)
+	if err != nil {
+		return 0, err
+	}
+	return amount, nil
 }
 
-func appendAmountToData(raw string) int64{
+func appendAmountToData(raw string) (int64, error) {
 	var err error
 	file, err := os.OpenFile(dataPath, os.O_APPEND|os.O_WRONLY, 0644)
 	defer file.Close()
 	// need to read what is the best practise for handling errors
 	if err != nil {
-		fmt.Println("opening file", err)
+		return 0, fmt.Errorf("unable to open file: %w", err)
 	}
 	_, err = file.WriteString(raw + "\n")
 	if err != nil {
-		fmt.Println("writing file", err)
+		return 0, fmt.Errorf("unable to write string: %w", err)
 	}
 	fileInto, err := file.Stat()
 	if err != nil {
-		fmt.Println(err)
+		return 0, fmt.Errorf("unable to get byte offset %w", err)
 	}
 	// could also keep track of file size with a var
 	size := fileInto.Size()
-	return size
+	return size, nil
 }
 
-func setAmount(name, amount string) {
-	raw := encodeLine(name, amount)
-	endOfFileOffset := appendAmountToData(raw)
+func setAmount(name, amount string) error {
+	amountInt, err := strconv.Atoi(amount)
+	if err != nil {
+		return fmt.Errorf("unable to convert amount to int: %w", err)
+	}
+	if amountInt > math.MaxInt32 {
+		return errors.New("the amout is too large")
+	}
+	raw, err := encodeLine(name, amount)
+	if err != nil {
+		return err
+	}
+	endOfFileOffset, err := appendAmountToData(raw)
+	if err != nil {
+		return fmt.Errorf("unable to get file offset: %w", err)
+	}
 	nameToOffset[name] = endOfFileOffset
+	return nil
 }
