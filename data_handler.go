@@ -15,9 +15,15 @@ const splitToken = ":"
 const namePadding = "-"
 const lineOffSet = 22
 const nameMaxLength = 10
+const algorithmType = "binaryTree"
+
+type indexOffset interface {
+	get(key string) (int64, bool)
+	add(key string, value int64)
+}
 
 var dataPath string
-var nameToOffset map[string]int64
+var currentIndex indexOffset
 
 func initCheckDataFileExists() {
 	workingDir, err := os.Getwd()
@@ -37,11 +43,18 @@ func initCheckDataFileExists() {
 	}
 }
 
+func chooseIndex() {
+	if algorithmType == "binaryTree" {
+		currentIndex = &btree{}
+	} else {
+		currentIndex = hashTable{}
+	}
+}
+
 func initLoadInMemoryMapping() {
 	file, _ := os.Open(dataPath)
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
-	nameToOffset = make(map[string]int64)
 	var currentOffset int64 = 0
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -49,13 +62,14 @@ func initLoadInMemoryMapping() {
 		if err != nil {
 			panic(fmt.Errorf("data file corrupt: %w", err))
 		}
-		nameToOffset[name] = currentOffset
+		currentIndex.add(name, currentOffset)
 		currentOffset += lineOffSet
 	}
 }
 
 func init() {
 	initCheckDataFileExists()
+	chooseIndex()
 	initLoadInMemoryMapping()
 }
 
@@ -97,7 +111,7 @@ func readAtByteOffset(offset int64) string {
 }
 
 func getAmount(name string) (int, error) {
-	offset, ok := nameToOffset[name]
+	offset, ok := currentIndex.get(name)
 	if !ok {
 		// should I push this error up of handle it here?
 		return 0, errors.New("name not in db")
@@ -147,6 +161,6 @@ func setAmount(name, amount string) error {
 	if err != nil {
 		return fmt.Errorf("unable to get file offset: %w", err)
 	}
-	nameToOffset[name] = endOfFileOffset
+	currentIndex.add(name, endOfFileOffset)
 	return nil
 }
