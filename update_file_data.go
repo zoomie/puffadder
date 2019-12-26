@@ -6,72 +6,13 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"path"
 	"strconv"
 	"strings"
 )
 
 const splitToken = ":"
 const namePadding = "-"
-const lineOffSet = 22
 const nameMaxLength = 10
-const algorithmType = "binaryTree"
-
-type indexOffset interface {
-	get(key string) (int64, bool)
-	add(key string, value int64)
-}
-
-var dataPath string
-var currentIndex indexOffset
-
-func initCheckDataFileExists() {
-	workingDir, err := os.Getwd()
-	if err != nil {
-		panic(err)
-	}
-	dataPath = path.Join(workingDir, "data.puff")
-	if _, err := os.Stat(dataPath); err == nil {
-		fmt.Println("Data path exists at: ", dataPath)
-	} else {
-		_, err := os.Create(dataPath)
-		if err != nil {
-			panic(fmt.Errorf("Could not create data file: %w", err))
-		} else {
-			fmt.Println("Data path created at:", dataPath)
-		}
-	}
-}
-
-func chooseIndex() {
-	if algorithmType == "binaryTree" {
-		currentIndex = &btree{}
-	} else {
-		currentIndex = hashTable{}
-	}
-}
-
-func initLoadInMemoryMapping() {
-	file, _ := os.Open(dataPath)
-	defer file.Close()
-	scanner := bufio.NewScanner(file)
-	var currentOffset int64 = 0
-	for scanner.Scan() {
-		line := scanner.Text()
-		name, _, err := decodeLine(line)
-		if err != nil {
-			panic(fmt.Errorf("data file corrupt: %w", err))
-		}
-		currentIndex.add(name, currentOffset)
-		currentOffset += lineOffSet
-	}
-}
-
-func init() {
-	initCheckDataFileExists()
-	chooseIndex()
-	initLoadInMemoryMapping()
-}
 
 func encodeLine(name string, number string) (string, error) {
 	if len(name) > 10 {
@@ -110,8 +51,8 @@ func readAtByteOffset(offset int64) string {
 	return line
 }
 
-func getAmount(name string) (int, error) {
-	offset, ok := currentIndex.get(name)
+func getAmount(index indexOffset, name string) (int, error) {
+	offset, ok := index.get(name)
 	if !ok {
 		// should I push this error up of handle it here?
 		return 0, errors.New("name not in db")
@@ -145,7 +86,7 @@ func appendAmountToData(raw string) (int64, error) {
 	return size, nil
 }
 
-func setAmount(name, amount string) error {
+func setAmount(index indexOffset, name, amount string) error {
 	amountInt, err := strconv.Atoi(amount)
 	if err != nil {
 		return fmt.Errorf("unable to convert amount to int: %w", err)
@@ -161,6 +102,10 @@ func setAmount(name, amount string) error {
 	if err != nil {
 		return fmt.Errorf("unable to get file offset: %w", err)
 	}
-	currentIndex.add(name, endOfFileOffset)
+	index.add(name, endOfFileOffset)
 	return nil
 }
+
+// func transaction(name1, name2, amount1, amount2 string) error {
+// 	// if both operations are valid then process the transactions.
+// }
