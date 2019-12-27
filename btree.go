@@ -54,7 +54,7 @@ func getValue(baseNode *node, key string) (int64, bool) {
 	}
 }
 
-func (b btree) get(key string) (int64, bool) {
+func (b *btree) get(key string) (int64, bool) {
 	if b.start == nil {
 		return 0, false
 	}
