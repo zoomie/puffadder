@@ -86,15 +86,12 @@ func appendAmountToData(raw string) (int64, error) {
 	return size, nil
 }
 
-func setAmount(index indexOffset, name, amount string) error {
-	amountInt, err := strconv.Atoi(amount)
-	if err != nil {
-		return fmt.Errorf("unable to convert amount to int: %w", err)
+func setAmount(index indexOffset, name string, amount int) error {
+	if amount > math.MaxInt32 {
+		return errors.New("the value is too large")
 	}
-	if amountInt > math.MaxInt32 {
-		return errors.New("the amout is too large")
-	}
-	raw, err := encodeLine(name, amount)
+	amountString := strconv.Itoa(amount)
+	raw, err := encodeLine(name, amountString)
 	if err != nil {
 		return err
 	}

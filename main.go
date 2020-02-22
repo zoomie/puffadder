@@ -3,8 +3,11 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"log"
+	"net/http"
 	"os"
 	"path"
+	"strconv"
 )
 
 const algorithmType = "binaryTree"
@@ -18,7 +21,7 @@ type indexOffset interface {
 var dataPath string
 var currentIndex indexOffset
 
-func init() {
+func setupDataFile() {
 	// Check if data file exists
 	workingDir, err := os.Getwd()
 	if err != nil {
@@ -37,15 +40,15 @@ func init() {
 	}
 }
 
-func chooseIndex() indexOffset {
+func chooseIndex() {
 	if algorithmType == "binaryTree" {
-		return &btree{}
+		currentIndex = &btree{}
 	} else {
-		return hashTable{}
+		currentIndex = &orderedArray{}
 	}
 }
 
-func initLoadInMemoryMapping(index indexOffset) {
+func loadInMemoryMapping() {
 	file, _ := os.Open(dataPath)
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
@@ -56,29 +59,72 @@ func initLoadInMemoryMapping(index indexOffset) {
 		if err != nil {
 			panic(fmt.Errorf("data file corrupt: %w", err))
 		}
-		index.add(name, currentOffset)
+		currentIndex.add(name, currentOffset)
 		currentOffset += lineOffSet
 	}
 }
 
-func main() {
-	index := chooseIndex()
-	initLoadInMemoryMapping(index)
-	operation := os.Args[1]
-	name := os.Args[2]
-	if operation == "get" {
-		amount, err := getAmount(index, name)
-		if err != nil {
-			panic((err))
-		}
-		fmt.Println(amount)
-	} else if operation == "set" {
-		amount := os.Args[3]
-		err := setAmount(index, name, amount)
-		if err != nil {
-			panic(err)
-		}
-	} else {
-		fmt.Println("Incorrect operation")
+func init() {
+	setupDataFile()
+	chooseIndex()
+	loadInMemoryMapping()
+}
+
+func createAccount(w http.ResponseWriter, r *http.Request) {
+	// need to cove the case when the user already exists in the system
+	data := r.URL.Query()
+	accountName := data["accountName"][0]
+	startingAmount := data["startingAmount"][0]
+	inputAmount, _ := strconv.Atoi(startingAmount)
+	err := setAmount(currentIndex, accountName, inputAmount)
+	if err != nil {
+		fmt.Fprintf(w, "Set amount failed")
 	}
+	fmt.Fprintf(w, "account created")
+}
+
+func viewCurrentAccount(w http.ResponseWriter, r *http.Request) {
+	data := r.URL.Query()
+	accountName := data["accountName"][0]
+	amount, err := getAmount(currentIndex, accountName)
+	if err != nil {
+		fmt.Fprintf(w, "error")
+	}
+	fmt.Println(amount)
+}
+
+func addMoney(w http.ResponseWriter, r *http.Request) {
+	data := r.URL.Query()
+	accountName := data["accountName"][0]
+	addAmount, _ := strconv.Atoi(data["addAmount"][0])
+	currentAmount, _ := getAmount(currentIndex, accountName)
+	newAmount := currentAmount + addAmount
+	_ = setAmount(currentIndex, accountName, newAmount)
+}
+
+func withdrawMoney(w http.ResponseWriter, r *http.Request) {
+	data := r.URL.Query()
+	accountName := data["accountName"][0]
+	subtractAmount, _ := strconv.Atoi(data["subtractAmount"][0])
+	currentAmount, _ := getAmount(currentIndex, accountName)
+	if subtractAmount > currentAmount {
+		fmt.Println("can't do transaction")
+	} else {
+		newAmount := currentAmount - subtractAmount
+		_ = setAmount(currentIndex, accountName, newAmount)
+	}
+}
+
+func exchange(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "still need to implement")
+}
+
+func main() {
+	http.HandleFunc("/create-account", createAccount)
+	http.HandleFunc("/view-current-account", viewCurrentAccount)
+	http.HandleFunc("/add-money", addMoney)
+	http.HandleFunc("/withdraw-money", withdrawMoney)
+	http.HandleFunc("/exchange", exchange)
+
+	log.Fatal(http.ListenAndServe(":8090", nil))
 }
