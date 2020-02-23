@@ -4,20 +4,36 @@ import (
 	"testing"
 )
 
-func testHashTable(t *testing.T) {
-	key1 := "key1"
-	var value1 int64 = 1
-	key2 := "key2"
-	var value2 int64 = 2
-	h := hashTable{}
-	h.add(key1, value1)
-	h.add(key2, value2)
-	output1, _ := h.get(key1)
-	output2, _ := h.get(key2)
-	if output1 != value1 {
-		t.Errorf("hash failed")
+func getInputValues() map[string]int64 {
+	testCases := map[string]int64{
+		"key1":    1,
+		"key2":    2,
+		"key3":    3,
+		"newType": 1000,
+		"aaaaaa":  2121,
+		"z":       100000000000000,
 	}
-	if output2 != value2 {
-		t.Errorf("hash failed")
+	return testCases
+}
+
+func TestAlgorithms(t *testing.T) {
+	testCases := getInputValues()
+	algsToTest := []indexOffset{
+		&hashTable{},
+		&orderedArray{},
+		&btree{},
+	}
+	for _, algorthim := range algsToTest {
+		for key, value := range testCases {
+			algorthim.add(key, value)
+		}
+		for key, expectedValue := range testCases {
+			outputValue, _ := algorthim.get(key)
+			if expectedValue != outputValue {
+				t.Errorf("expectedValue=%d, outputValue=%d", expectedValue, outputValue)
+			}
+		}
 	}
 }
+
+// todo: add test cases for failing numbers. ie to large

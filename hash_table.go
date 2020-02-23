@@ -21,6 +21,9 @@ func hashString(s string, lenght int) int {
 	h.Write([]byte(s))
 	largeValue := int(h.Sum64())
 	index := largeValue % lenght
+	if index < 0 {
+		return -index
+	}
 	return index
 }
 
