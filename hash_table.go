@@ -1,6 +1,8 @@
 package main
 
-const initArrLength = 5
+import "hash/fnv"
+
+const initArrLength = 100
 
 type htuple struct {
 	key   string
@@ -15,15 +17,19 @@ type hashTable struct {
 }
 
 func hashString(s string, lenght int) int {
-	// need to get sha implementation
-	return 0
+	h := fnv.New64a()
+	h.Write([]byte(s))
+	largeValue := int(h.Sum64())
+	index := largeValue % lenght
+	return index
 }
 
 func (h *hashTable) add(key string, value int64) {
-	index := hashString(key, h.length)
 	if h.array == nil {
 		h.array = make(valuesArray, initArrLength)
+		h.length = initArrLength
 	}
+	index := hashString(key, h.length)
 	for i := range h.array[index] {
 		if h.array[index][i].key == key {
 			h.array[index][i].value = value
@@ -43,8 +49,3 @@ func (h *hashTable) get(key string) (int64, bool) {
 	}
 	return 0, false
 }
-
-// func main() {
-// 	h := hashTable{}
-// 	h.add("key", 543)
-// }

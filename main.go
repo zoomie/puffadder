@@ -4,13 +4,15 @@ import (
 	"bufio"
 	"fmt"
 	"log"
+
+	// "log"
 	"net/http"
 	"os"
 	"path"
 	"strconv"
 )
 
-const algorithmType = "binaryTree"
+const algorithmType = "binaryTree" // default
 const lineOffSet = 22
 
 type indexOffset interface {
@@ -41,10 +43,12 @@ func setupDataFile() {
 }
 
 func chooseIndex() {
-	if algorithmType == "binaryTree" {
-		currentIndex = &btree{}
-	} else {
+	if algorithmType == "hashTable" {
+		currentIndex = &hashTable{}
+	} else if algorithmType == "orderedArray" {
 		currentIndex = &orderedArray{}
+	} else {
+		currentIndex = &btree{}
 	}
 }
 
