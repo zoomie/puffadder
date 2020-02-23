@@ -79,6 +79,7 @@ func createAccount(w http.ResponseWriter, r *http.Request) {
 	err := setAmount(currentIndex, accountName, inputAmount)
 	if err != nil {
 		fmt.Fprintf(w, "Set amount failed")
+		return
 	}
 	fmt.Fprintf(w, "account created")
 }
@@ -89,6 +90,7 @@ func viewCurrentAccount(w http.ResponseWriter, r *http.Request) {
 	amount, err := getAmount(currentIndex, accountName)
 	if err != nil {
 		fmt.Fprintf(w, "error")
+		return
 	}
 	fmt.Println(amount)
 }
@@ -109,14 +111,25 @@ func withdrawMoney(w http.ResponseWriter, r *http.Request) {
 	currentAmount, _ := getAmount(currentIndex, accountName)
 	if subtractAmount > currentAmount {
 		fmt.Println("can't do transaction")
-	} else {
-		newAmount := currentAmount - subtractAmount
-		_ = setAmount(currentIndex, accountName, newAmount)
+		return
 	}
+	newAmount := currentAmount - subtractAmount
+	_ = setAmount(currentIndex, accountName, newAmount)
 }
 
-func exchange(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "still need to implement")
+func transfer(w http.ResponseWriter, r *http.Request) {
+	data := r.URL.Query()
+	fromAccount := data["fromAccount"][0]
+	toAccount := data["toAccount"][0]
+	transferAmount, _ := strconv.Atoi(data["transferAmount"][0])
+	fromAccountAmount, _ := getAmount(currentIndex, fromAccount)
+	if transferAmount > fromAccountAmount {
+		fmt.Println("from account does not have enouth money")
+		return
+	}
+	_ = setAmount(currentIndex, fromAccount, fromAccountAmount-transferAmount)
+	toCurrentAmount, _ := getAmount(currentIndex, toAccount)
+	_ = setAmount(currentIndex, toAccount, toCurrentAmount+transferAmount)
 }
 
 func main() {
@@ -124,7 +137,7 @@ func main() {
 	http.HandleFunc("/view-current-account", viewCurrentAccount)
 	http.HandleFunc("/add-money", addMoney)
 	http.HandleFunc("/withdraw-money", withdrawMoney)
-	http.HandleFunc("/exchange", exchange)
+	http.HandleFunc("/transfer", transfer)
 
 	log.Fatal(http.ListenAndServe(":8090", nil))
 }
