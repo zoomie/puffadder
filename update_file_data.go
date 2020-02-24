@@ -13,25 +13,30 @@ import (
 const splitToken = ":"
 const namePadding = "-"
 const nameMaxLength = 10
+const createEvent = "create--"
+const addEvent = "add-----"
+const withdrawEvent = "withdraw"
 
-func encodeLine(name string, number string) (string, error) {
+func encodeLine(name, eventType, number string) (string, error) {
 	if len(name) > 10 {
 		return "", errors.New("name too long")
 	}
 	namePadded := name + strings.Repeat(namePadding, 10-len(name))
 	numberPadded := strings.Repeat(namePadding, 10-len(number)) + number
-	return namePadded + splitToken + numberPadded, nil
+	line := namePadded + splitToken + eventType + splitToken + numberPadded
+	return line, nil
 }
 
-func decodeLine(raw string) (string, int, error) {
+func decodeLine(raw string) (string, string, int, error) {
 	splitRaw := strings.Split(raw, splitToken)
 	name := strings.Trim(splitRaw[0], namePadding)
-	amountString := strings.Trim(splitRaw[1], namePadding)
+	eventType := splitRaw[1]
+	amountString := strings.Trim(splitRaw[2], namePadding)
 	amount, err := strconv.Atoi(amountString)
 	if err != nil {
-		return "", 0, fmt.Errorf("could not decode line: %w", err)
+		return "", "", 0, fmt.Errorf("could not decode line: %w", err)
 	}
-	return name, amount, nil
+	return name, eventType, amount, nil
 }
 func readAtByteOffset(offset int64) string {
 	file, _ := os.Open(dataPath)
@@ -51,20 +56,6 @@ func readAtByteOffset(offset int64) string {
 	return line
 }
 
-func getAmount(index indexOffset, name string) (int, error) {
-	offset, ok := index.get(name)
-	if !ok {
-		// should I push this error up of handle it here?
-		return 0, errors.New("name not in db")
-	}
-	line := readAtByteOffset(offset)
-	_, amount, err := decodeLine(line)
-	if err != nil {
-		return 0, err
-	}
-	return amount, nil
-}
-
 func appendAmountToData(raw string) (int64, error) {
 	var err error
 	file, err := os.OpenFile(dataPath, os.O_APPEND|os.O_WRONLY, 0644)
@@ -82,27 +73,71 @@ func appendAmountToData(raw string) (int64, error) {
 		return 0, fmt.Errorf("unable to get byte offset %w", err)
 	}
 	// could also keep track of file size with a var
-	size := fileInto.Size()
-	return size, nil
+	endOfFileOffset := fileInto.Size()
+	return endOfFileOffset, nil
 }
 
-func setAmount(index indexOffset, name string, amount int) error {
-	if amount > math.MaxInt32 {
-		return errors.New("the value is too large")
+func subtractMoneyEvent(index indexOffset, name string, subtractAmount int) error {
+	currentAmount, ok := index.get(name)
+	if !ok {
+		return errors.New("name not in db")
 	}
-	amountString := strconv.Itoa(amount)
-	raw, err := encodeLine(name, amountString)
+	updatedAmount := currentAmount - subtractAmount
+	if updatedAmount < 0 {
+		return errors.New("not enough money")
+	}
+	subtractAmountString := strconv.Itoa(subtractAmount)
+	raw, err := encodeLine(name, withdrawEvent, subtractAmountString)
 	if err != nil {
 		return err
 	}
-	endOfFileOffset, err := appendAmountToData(raw)
+	index.add(name, updatedAmount)
+	_, err = appendAmountToData(raw)
 	if err != nil {
-		return fmt.Errorf("unable to get file offset: %w", err)
+		index.add(name, currentAmount)
+		return fmt.Errorf("unable to persist data to file: %w", err)
 	}
-	index.add(name, endOfFileOffset)
 	return nil
 }
 
-// func transaction(name1, name2, amount1, amount2 string) error {
-// 	// if both operations are valid then process the transactions.
-// }
+func addMoneyEvent(index indexOffset, name string, addAmount int) error {
+	currentAmount, ok := index.get(name)
+	if !ok {
+		return errors.New("account does not exist")
+	}
+	if addAmount > math.MaxInt32 {
+		return errors.New("the value is too large")
+	}
+	amountString := strconv.Itoa(addAmount)
+	raw, err := encodeLine(name, addEvent, amountString)
+	if err != nil {
+		return err
+	}
+	updatedAmount := currentAmount + addAmount
+	index.add(name, updatedAmount)
+	_, err = appendAmountToData(raw)
+	if err != nil {
+		// roll back the update
+		index.add(name, currentAmount)
+		return fmt.Errorf("unable to persist data to file: %w", err)
+	}
+	return nil
+}
+
+func createAccountEvent(index indexOffset, name string) error {
+	_, ok := index.get(name)
+	if ok {
+		return fmt.Errorf("Account already exists")
+	}
+	startingValue := 0
+	index.add(name, startingValue)
+	raw, err := encodeLine(name, createEvent, strconv.Itoa(startingValue))
+	if err != nil {
+		return err
+	}
+	_, err = appendAmountToData(raw)
+	if err != nil {
+		return fmt.Errorf("Unable to get file offset: %w", err)
+	}
+	return nil
+}

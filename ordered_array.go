@@ -6,12 +6,12 @@ import (
 
 type tuple struct {
 	key   string
-	value int64
+	value int
 }
 
 type orderedArray []tuple
 
-func (array *orderedArray) add(key string, value int64) {
+func (array *orderedArray) add(key string, value int) {
 	newTup := tuple{key: key, value: value}
 	arrayLength := len(*array)
 	if arrayLength == 0 {
@@ -48,7 +48,7 @@ func (array *orderedArray) add(key string, value int64) {
 	}
 }
 
-func binarySearchGet(array orderedArray, key string) (int64, bool) {
+func binarySearchGet(array orderedArray, key string) (int, bool) {
 	if len(array) == 0 {
 		return 0, false
 	}
@@ -70,7 +70,7 @@ func binarySearchGet(array orderedArray, key string) (int64, bool) {
 	}
 }
 
-func (array *orderedArray) get(key string) (int64, bool) {
+func (array *orderedArray) get(key string) (int, bool) {
 	return binarySearchGet(*array, key)
 }
 

@@ -6,7 +6,7 @@ const initArrLength = 100
 
 type htuple struct {
 	key   string
-	value int64
+	value int
 }
 
 type valuesArray [][]htuple
@@ -27,7 +27,7 @@ func hashString(s string, lenght int) int {
 	return index
 }
 
-func (h *hashTable) add(key string, value int64) {
+func (h *hashTable) add(key string, value int) {
 	if h.array == nil {
 		h.array = make(valuesArray, initArrLength)
 		h.length = initArrLength
@@ -43,7 +43,7 @@ func (h *hashTable) add(key string, value int64) {
 	h.array[index] = append(h.array[index], newTuple)
 }
 
-func (h *hashTable) get(key string) (int64, bool) {
+func (h *hashTable) get(key string) (int, bool) {
 	index := hashString(key, h.length)
 	for _, tup := range h.array[index] {
 		if tup.key == key {

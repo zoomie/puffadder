@@ -6,7 +6,7 @@ type btree struct {
 
 type node struct {
 	key   string
-	value int64
+	value int
 	left  *node
 	right *node
 }
@@ -29,7 +29,7 @@ func addNode(baseNode, newNode *node) {
 	}
 }
 
-func (b *btree) add(key string, value int64) {
+func (b *btree) add(key string, value int) {
 	newNode := &node{key: key, value: value}
 	if b.start == nil {
 		b.start = newNode
@@ -38,7 +38,7 @@ func (b *btree) add(key string, value int64) {
 	}
 }
 
-func getValue(baseNode *node, key string) (int64, bool) {
+func getValue(baseNode *node, key string) (int, bool) {
 	if baseNode.key < key {
 		if baseNode.right == nil {
 			return 0, false
@@ -54,7 +54,7 @@ func getValue(baseNode *node, key string) (int64, bool) {
 	}
 }
 
-func (b *btree) get(key string) (int64, bool) {
+func (b *btree) get(key string) (int, bool) {
 	if b.start == nil {
 		return 0, false
 	}

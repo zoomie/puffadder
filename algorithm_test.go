@@ -4,8 +4,8 @@ import (
 	"testing"
 )
 
-func getInputValues() map[string]int64 {
-	testCases := map[string]int64{
+func getInputValues() map[string]int {
+	testCases := map[string]int{
 		"key1":    1,
 		"key2":    2,
 		"key3":    3,
