@@ -77,7 +77,7 @@ func appendAmountToData(raw string) (int64, error) {
 	return endOfFileOffset, nil
 }
 
-func subtractMoneyEvent(index indexOffset, name string, subtractAmount int) error {
+func subtractMoneyEvent(index keyValueStore, name string, subtractAmount int) error {
 	currentAmount, ok := index.get(name)
 	if !ok {
 		return errors.New("name not in db")
@@ -100,7 +100,7 @@ func subtractMoneyEvent(index indexOffset, name string, subtractAmount int) erro
 	return nil
 }
 
-func addMoneyEvent(index indexOffset, name string, addAmount int) error {
+func addMoneyEvent(index keyValueStore, name string, addAmount int) error {
 	currentAmount, ok := index.get(name)
 	if !ok {
 		return errors.New("account does not exist")
@@ -124,13 +124,13 @@ func addMoneyEvent(index indexOffset, name string, addAmount int) error {
 	return nil
 }
 
-func createAccountEvent(index indexOffset, name string) error {
-	_, ok := index.get(name)
+func createAccountEvent(account keyValueStore, name string) error {
+	_, ok := account.get(name)
 	if ok {
 		return fmt.Errorf("Account already exists")
 	}
 	startingValue := 0
-	index.add(name, startingValue)
+	account.add(name, startingValue)
 	raw, err := encodeLine(name, createEvent, strconv.Itoa(startingValue))
 	if err != nil {
 		return err

@@ -18,7 +18,7 @@ func getInputValues() map[string]int {
 
 func TestAlgorithms(t *testing.T) {
 	testCases := getInputValues()
-	algsToTest := []indexOffset{
+	algsToTest := []keyValueStore{
 		&hashTable{},
 		&orderedArray{},
 		&btree{},

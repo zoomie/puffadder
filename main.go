@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"strconv"
 
 	// "log"
@@ -15,13 +14,13 @@ import (
 const algorithmType = "binaryTree" // default
 const lineOffSet = 31
 
-type indexOffset interface {
+type keyValueStore interface {
 	get(key string) (int, bool)
 	add(key string, value int)
 }
 
 var dataPath string
-var currentIndex indexOffset
+var accountProjection keyValueStore
 
 func setupDataFile() {
 	// Check if data file exists
@@ -30,25 +29,26 @@ func setupDataFile() {
 		panic(err)
 	}
 	dataPath = path.Join(workingDir, "data.puff")
-	if _, err := os.Stat(dataPath); err == nil {
+	_, err = os.Stat(dataPath)
+	if err == nil {
 		fmt.Println("Data path exists at: ", dataPath)
-	} else {
-		_, err := os.Create(dataPath)
-		if err != nil {
-			panic(fmt.Errorf("Could not create data file: %w", err))
-		} else {
-			fmt.Println("Data path created at:", dataPath)
-		}
+		return
 	}
+	_, err = os.Create(dataPath)
+	if err != nil {
+		panic(fmt.Errorf("Could not create data file: %w", err))
+	}
+	fmt.Println("Data path created at:", dataPath)
+
 }
 
 func chooseIndex() {
 	if algorithmType == "hashTable" {
-		currentIndex = &hashTable{}
+		accountProjection = &hashTable{}
 	} else if algorithmType == "orderedArray" {
-		currentIndex = &orderedArray{}
+		accountProjection = &orderedArray{}
 	} else {
-		currentIndex = &btree{}
+		accountProjection = &btree{}
 	}
 }
 
@@ -61,16 +61,16 @@ func createAccountProjection() {
 		line := scanner.Text()
 		name, eventType, changeAmount, err := decodeLine(line)
 		if eventType == createEvent {
-			currentIndex.add(name, 0)
+			accountProjection.add(name, 0)
 		} else if eventType == addEvent {
-			currentAmount, _ := currentIndex.get(name)
+			currentAmount, _ := accountProjection.get(name)
 			updatedAmount := currentAmount + changeAmount
-			currentIndex.add(name, updatedAmount)
+			accountProjection.add(name, updatedAmount)
 
 		} else if eventType == withdrawEvent {
-			currentAmount, _ := currentIndex.get(name)
+			currentAmount, _ := accountProjection.get(name)
 			updatedAmount := currentAmount - changeAmount
-			currentIndex.add(name, updatedAmount)
+			accountProjection.add(name, updatedAmount)
 		} else {
 			panic(fmt.Errorf("incorrect event"))
 		}
@@ -90,7 +90,7 @@ func init() {
 func createAccount(w http.ResponseWriter, r *http.Request) {
 	// need to cove the case when the user already exists in the system
 	accountName := r.FormValue("accountName")
-	err := createAccountEvent(currentIndex, accountName)
+	err := createAccountEvent(accountProjection, accountName)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -100,7 +100,7 @@ func createAccount(w http.ResponseWriter, r *http.Request) {
 
 func viewCurrentAccount(w http.ResponseWriter, r *http.Request) {
 	accountName := r.FormValue("accountName")
-	amount, ok := currentIndex.get(accountName)
+	amount, ok := accountProjection.get(accountName)
 	if !ok {
 		http.Error(w, "Account does not exist", http.StatusBadRequest)
 		return
@@ -115,7 +115,7 @@ func addMoney(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "addAmount is invalid", http.StatusBadRequest)
 		return
 	}
-	err = addMoneyEvent(currentIndex, accountName, addAmount)
+	err = addMoneyEvent(accountProjection, accountName, addAmount)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
@@ -127,7 +127,7 @@ func withdrawMoney(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "invalid subtract value", http.StatusBadRequest)
 	}
-	err = subtractMoneyEvent(currentIndex, accountName, subtractAmount)
+	err = subtractMoneyEvent(accountProjection, accountName, subtractAmount)
 	if err != nil {
 		http.Error(w, "not enough money", http.StatusBadRequest)
 		return
@@ -139,14 +139,15 @@ func transfer(w http.ResponseWriter, r *http.Request) {
 	fromAccount := r.FormValue("fromAccount")
 	toAccount := r.FormValue("toAccount")
 	transferAmount, _ := strconv.Atoi(r.FormValue("transferAmount"))
-	fromAccountAmount, _ := currentIndex.get(fromAccount)
+	fromAccountAmount, _ := accountProjection.get(fromAccount)
 	if transferAmount > fromAccountAmount {
 		http.Error(w, "from account does not have enouth money", http.StatusBadRequest)
 		return
 	}
 	// add error handling to transactions between accounts
-	_ = addMoneyEvent(currentIndex, fromAccount, transferAmount)
-	_ = subtractMoneyEvent(currentIndex, toAccount, transferAmount)
+	_ = addMoneyEvent(accountProjection, fromAccount, transferAmount)
+	_ = subtractMoneyEvent(accountProjection, toAccount, transferAmount)
+	fmt.Fprintln(w, "transaction successful, amount:", transferAmount)
 }
 
 func main() {
@@ -157,9 +158,3 @@ func main() {
 	http.HandleFunc("/transfer", transfer)
 
 	log.Fatal(http.ListenAndServe(":8090", nil))
-}
-
-// if err != nil {
-// 	http.Error(w, "startingAmount is not a number", http.StatusBadRequest)
-// 	return
-// }
