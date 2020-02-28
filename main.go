@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"strconv"
 
 	// "log"
@@ -138,15 +139,29 @@ func withdrawMoney(w http.ResponseWriter, r *http.Request) {
 func transfer(w http.ResponseWriter, r *http.Request) {
 	fromAccount := r.FormValue("fromAccount")
 	toAccount := r.FormValue("toAccount")
-	transferAmount, _ := strconv.Atoi(r.FormValue("transferAmount"))
-	fromAccountAmount, _ := accountProjection.get(fromAccount)
+	transferAmount, err := strconv.Atoi(r.FormValue("transferAmount"))
+	if err != nil {
+		http.Error(w, "transferAmount is not a number", http.StatusBadRequest)
+		return
+	}
+	fromAccountAmount, okFrom := accountProjection.get(fromAccount)
+	_, okTo := accountProjection.get(toAccount)
+	if !okFrom || !okTo {
+		http.Error(w, "fromAccount and/or toAccount does not exist", http.StatusBadRequest)
+		return
+	}
 	if transferAmount > fromAccountAmount {
-		http.Error(w, "from account does not have enouth money", http.StatusBadRequest)
+		http.Error(w, "fromAccount does not have enouth money", http.StatusBadRequest)
 		return
 	}
 	// add error handling to transactions between accounts
-	_ = addMoneyEvent(accountProjection, fromAccount, transferAmount)
-	_ = subtractMoneyEvent(accountProjection, toAccount, transferAmount)
+	err = subtractMoneyEvent(accountProjection, fromAccount, transferAmount)
+	if err != nil {
+		// need to think about how to propgate erros here
+		http.Error(w, "unable to subtract amount from account", http.StatusBadRequest)
+		return
+	}
+	_ = addMoneyEvent(accountProjection, toAccount, transferAmount)
 	fmt.Fprintln(w, "transaction successful, amount:", transferAmount)
 }
 
@@ -158,3 +173,4 @@ func main() {
 	http.HandleFunc("/transfer", transfer)
 
 	log.Fatal(http.ListenAndServe(":8090", nil))
+}
