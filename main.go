@@ -120,6 +120,7 @@ func addMoney(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
+	fmt.Fprintln(w, "Added money, amount:", addAmount)
 }
 
 func withdrawMoney(w http.ResponseWriter, r *http.Request) {

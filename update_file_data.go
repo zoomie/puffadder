@@ -77,8 +77,8 @@ func appendAmountToData(raw string) (int64, error) {
 	return endOfFileOffset, nil
 }
 
-func subtractMoneyEvent(index keyValueStore, name string, subtractAmount int) error {
-	currentAmount, ok := index.get(name)
+func subtractMoneyEvent(projection keyValueStore, name string, subtractAmount int) error {
+	currentAmount, ok := projection.get(name)
 	if !ok {
 		return errors.New("name not in db")
 	}
@@ -91,10 +91,10 @@ func subtractMoneyEvent(index keyValueStore, name string, subtractAmount int) er
 	if err != nil {
 		return err
 	}
-	index.add(name, updatedAmount)
+	projection.add(name, updatedAmount)
 	_, err = appendAmountToData(raw)
 	if err != nil {
-		index.add(name, currentAmount)
+		projection.add(name, currentAmount)
 		return fmt.Errorf("unable to persist data to file: %w", err)
 	}
 	return nil

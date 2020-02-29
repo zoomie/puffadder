@@ -8,102 +8,115 @@ import (
 	"testing"
 )
 
+var baseURL = "localhost:8090/"
+
 // Find way to use different data file
 // I could make the datafile and projection local vars?
-func clearDataDir() {
-	_, err := os.Stat(dataPath)
+func setUp() {
+	workingDir, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+	dataPath = path.Join(workingDir, "test_data.puff")
+	_, err = os.Stat(dataPath)
 	if err == nil {
-		_ = os.Remove(dataPath)
+		os.Remove(dataPath)
 	}
 	os.Create(dataPath)
+	// empty key value store after each test
+	accountProjection = &btree{}
+}
+
+func createAccountSetUp(accountName string) (*httptest.ResponseRecorder, *http.Request) {
+	params := "?accountName=" + accountName
+	url := path.Join(baseURL+"create-account", params)
+	request, _ := http.NewRequest("POST", url, nil)
+	recorder := httptest.NewRecorder()
+	return recorder, request
 }
 
 func TestCreateAccount(t *testing.T) {
-	clearDataDir()
-	chooseIndex()
-	url := "localhost:8090/create-account"
-	params := "?accountName=joe"
-	fullURL := path.Join(url, params)
-	request, _ := http.NewRequest("GET", fullURL, nil)
-	recorder := httptest.NewRecorder()
+	setUp()
+	recorder, request := createAccountSetUp("joe")
 	createAccount(recorder, request)
 	response := recorder.Result()
 	if response.StatusCode != http.StatusOK {
-		t.Errorf("Creating task failed")
+		t.Errorf("Creating account failed")
 	}
 }
 
-func TestViewAndAddMoney(t *testing.T) {
-	clearDataDir()
-	chooseIndex()
+func TestViewAccount(t *testing.T) {
+	setUp()
+	createAccount(createAccountSetUp("joe"))
 
-	urlCreate := "localhost:8090/create-account"
-	paramsCreate := "?accountName=joe"
-	fullURLCreate := path.Join(urlCreate, paramsCreate)
-	requestCreate, _ := http.NewRequest("GET", fullURLCreate, nil)
-	recorderCreate := httptest.NewRecorder()
-	createAccount(recorderCreate, requestCreate)
-
-	urlView := "localhost:8090/view-current-account"
-	paramsView := "?accountName=joe"
-	fullURLView := path.Join(urlView, paramsView)
-	requestView, _ := http.NewRequest("GET", fullURLView, nil)
-	recorderView := httptest.NewRecorder()
-	viewCurrentAccount(recorderView, requestView)
-	responseView := recorderView.Result()
-	if responseView.StatusCode != http.StatusOK {
-		t.Errorf("Creating task failed")
+	params := "?accountName=joe"
+	fullURL := path.Join(baseURL+"view-current-account", params)
+	request, _ := http.NewRequest("GET", fullURL, nil)
+	recorder := httptest.NewRecorder()
+	viewCurrentAccount(recorder, request)
+	response := recorder.Result()
+	if response.StatusCode != http.StatusOK {
+		t.Errorf("View account failed")
 	}
+}
 
-	urlAdd := "localhost:8090/add-money"
-	paramsAdd := "?accountName=joe&addAmount=10"
-	fullURLAdd := path.Join(urlAdd, paramsAdd)
-	requestAdd, _ := http.NewRequest("GET", fullURLAdd, nil)
-	recorderAdd := httptest.NewRecorder()
-	addMoney(recorderAdd, requestAdd)
-	responseAdd := recorderAdd.Result()
-	if responseAdd.StatusCode != http.StatusOK {
-		t.Errorf("Creating task failed")
+func AddSetUp(accountName, amount string) (*httptest.ResponseRecorder, *http.Request) {
+	params := "?accountName=" + accountName + "&addAmount=" + amount
+	fullURL := path.Join(baseURL+"add-money", params)
+	request, _ := http.NewRequest("POST", fullURL, nil)
+	recorder := httptest.NewRecorder()
+	return recorder, request
+}
+
+func TestAdd(t *testing.T) {
+	setUp()
+	createAccount(createAccountSetUp("joe"))
+
+	recorder, request := AddSetUp("joe", "10")
+	addMoney(recorder, request)
+	response := recorder.Result()
+	if response.StatusCode != http.StatusOK {
+		t.Errorf("Adding money failed")
+	}
+}
+
+func withdrawSetUp(accountName, amount string) (*httptest.ResponseRecorder, *http.Request) {
+	params := "?accountName=" + accountName + "&subtractAmount=" + amount
+	fullURL := path.Join(baseURL+"withdraw-money", params)
+	request, _ := http.NewRequest("POST", fullURL, nil)
+	recorder := httptest.NewRecorder()
+	return recorder, request
+}
+
+func TestWithdraw(t *testing.T) {
+	setUp()
+	accountName := "joe"
+	createAccount(createAccountSetUp(accountName))
+	addMoney(AddSetUp(accountName, "10"))
+
+	recorder, request := withdrawSetUp(accountName, "5")
+	withdrawMoney(recorder, request)
+	response := recorder.Result()
+	if response.StatusCode != http.StatusOK {
+		t.Errorf("Test withdraw failed")
 	}
 }
 
 func TestTransfer(t *testing.T) {
-	clearDataDir()
-	chooseIndex()
+	fromAccountName := "joe"
+	createAccount(createAccountSetUp(fromAccountName))
+	addMoney(AddSetUp(fromAccountName, "10"))
 
-	urlCreate := "localhost:8090/create-account"
-	paramsCreate := "?accountName=joe"
-	fullURLCreate := path.Join(urlCreate, paramsCreate)
-	requestCreate, _ := http.NewRequest("GET", fullURLCreate, nil)
-	recorderCreate := httptest.NewRecorder()
-	createAccount(recorderCreate, requestCreate)
+	toAccount := "paul"
+	createAccount(createAccountSetUp(toAccount))
 
-	urlAdd := "localhost:8090/add-money"
-	paramsAdd := "?accountName=joe&addAmount=10"
-	fullURLAdd := path.Join(urlAdd, paramsAdd)
-	requestAdd, _ := http.NewRequest("GET", fullURLAdd, nil)
-	recorderAdd := httptest.NewRecorder()
-	addMoney(recorderAdd, requestAdd)
-	responseAdd := recorderAdd.Result()
-	if responseAdd.StatusCode != http.StatusOK {
-		t.Errorf("Creating task failed")
-	}
-
-	urlCreate = "localhost:8090/create-account"
-	paramsCreate = "?accountName=paul"
-	fullURLCreate = path.Join(urlCreate, paramsCreate)
-	requestCreate, _ = http.NewRequest("GET", fullURLCreate, nil)
-	recorderCreate = httptest.NewRecorder()
-	createAccount(recorderCreate, requestCreate)
-
-	urlTransfer := "localhost:8090/transfer"
-	paramsTransfer := "?fromAccount=joe&toAccount=paul&transferAmount=5"
-	fullURLTransfer := path.Join(urlTransfer, paramsTransfer)
-	requestTransfer, _ := http.NewRequest("GET", fullURLTransfer, nil)
-	recorderTransfer := httptest.NewRecorder()
-	transfer(recorderTransfer, requestTransfer)
-	responseTransfer := recorderTransfer.Result()
-	if responseTransfer.StatusCode != http.StatusOK {
+	params := "?fromAccount=" + fromAccountName + "&toAccount=" + toAccount + "&transferAmount=5"
+	fullURL := path.Join(baseURL+"transfer", params)
+	request, _ := http.NewRequest("GET", fullURL, nil)
+	recorder := httptest.NewRecorder()
+	transfer(recorder, request)
+	response := recorder.Result()
+	if response.StatusCode != http.StatusOK {
 		t.Errorf("Creating task failed")
 	}
 }
