@@ -14,9 +14,8 @@ The main features that allow this are:
 
 * Transactions between accounts are atomic.
 
-* All transactions are ATOMIC, therefore they are saved to disk and if the server crashes nothing is lost.
-
-
+* The database is durable, it stores each action to a file (like a commit log in other databases)
+  * Side note: I havn't looked into making sure it is flushed to permenated storeage like postgres (fsync)
 
 ---
 
@@ -68,18 +67,32 @@ Make withdraw, add-money and transactions POST requests
 ```sh
 
 curl 'localhost:8090/create-account?accountName=joe'
-curl 'localhost:8090/add-money?accountName=joe&addAmount=100'
 curl 'localhost:8090/view-current-account?accountName=joe' 
+curl 'localhost:8090/add-money?accountName=joe&addAmount=100'
 curl 'localhost:8090/withdraw-money?accountName=john&subtractAmount=10'
-curl 'localhost:8090/transfet?fromAccount=joe&subtractAmount=10'
+curl 'localhost:8090/transfet?fromAccount=joe&toAccount&subtractAmount=10'
 ```
 
-Or using one of the handlers directly:
+Test example of how to create an account in code, can be found in [server_test.go](server_test.go).
 
 ```go
 
-func main() {
-	x := "add working example in here"
+func createAccountSetUp(accountName string) (*httptest.ResponseRecorder, *http.Request) {
+	params := "?accountName=" + accountName
+	url := path.Join(baseURL+"create-account", params)
+	request, _ := http.NewRequest("POST", url, nil)
+	recorder := httptest.NewRecorder()
+	return recorder, request
+}
+
+func TestCreateAccount(t *testing.T) {
+	setUp()
+	recorder, request := createAccountSetUp("joe")
+	createAccount(recorder, request)
+	response := recorder.Result()
+	if response.StatusCode != http.StatusOK {
+		t.Errorf("Creating account failed")
+	}
 }
 ```
 
@@ -95,6 +108,10 @@ Algorithms that store value in memory:
 
 The file that persists the data to disk and updates the current value using an algorithm:
 * [update_file_data.go](update_file_data.go)
+
+Tests:
+* [algorithm_test.go](algorithm_test.go)
+* [server_test.go](server_test.go)
 
 ## Internals
 
