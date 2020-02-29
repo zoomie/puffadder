@@ -1,23 +1,22 @@
 package main
 
 import (
+	"strconv"
 	"testing"
 )
 
-func getInputValues() map[string]int {
-	testCases := map[string]int{
-		"key1":    1,
-		"key2":    2,
-		"key3":    3,
-		"newType": 1000,
-		"aaaaaa":  2121,
-		"z":       100000000000000,
+func getInputValues(numberTests int) map[string]int {
+	testCases := make(map[string]int)
+	num := 0
+	for num < numberTests {
+		testCases[strconv.Itoa(num)] = num
+		num++
 	}
 	return testCases
 }
 
 func TestAlgorithms(t *testing.T) {
-	testCases := getInputValues()
+	testCases := getInputValues(100)
 	algsToTest := []keyValueStore{
 		&hashTable{},
 		&orderedArray{},
