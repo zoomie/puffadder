@@ -26,8 +26,6 @@ type projectionStore struct {
 
 var dataPath string
 
-// var accountProjection keyValueStore
-
 func setupDataFile() {
 	// Check if data file exists
 	workingDir, err := os.Getwd()

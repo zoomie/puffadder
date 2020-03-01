@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"math"
@@ -38,23 +37,6 @@ func decodeLine(raw string) (string, string, int, error) {
 	}
 	return name, eventType, amount, nil
 }
-func readAtByteOffset(offset int64) string {
-	file, _ := os.Open(dataPath)
-	// should you check err before calling defer.Close()
-	// what if the file open fails, would defer.Close fail?
-	defer file.Close()
-	var whence int = 0 // read from start of file
-	_, err := file.Seek(offset, whence)
-	if err != nil {
-		fmt.Println(err)
-	}
-	// the scanner defaults to using '\n' to tokenize
-	scanner := bufio.NewScanner(file)
-	// Only scan one line, until the next token
-	scanner.Scan()
-	line := scanner.Text()
-	return line
-}
 
 func appendAmountToData(raw string) error {
 	var err error
@@ -68,12 +50,6 @@ func appendAmountToData(raw string) error {
 	if err != nil {
 		return fmt.Errorf("unable to write string: %w", err)
 	}
-	// fileInto, err := file.Stat()
-	// if err != nil {
-	// 	return 0, fmt.Errorf("unable to get byte offset %w", err)
-	// }
-	// // could also keep track of file size with a var
-	// endOfFileOffset := fileInto.Size()
 	return nil
 }
 
@@ -137,7 +113,7 @@ func createAccountEvent(projection keyValueStore, name string) error {
 	projection.add(name, startingValue)
 	err = appendAmountToData(raw)
 	if err != nil {
-		return fmt.Errorf("Unable to get file offset: %w", err)
+		return fmt.Errorf("failed to append to file: %w", err)
 	}
 	return nil
 }
