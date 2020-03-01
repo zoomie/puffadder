@@ -71,7 +71,7 @@ func (h *hashTable) add(key string, value int) {
 		h.array = make(valuesArray, startingLength)
 		h.length = startingLength
 	}
-	// Increase size of the array when enough values are stored
+	// Increase size of the array once a certian capacity has been reached.
 	fractionFull := int(float64(h.length) * capacityToExpand)
 	if h.currentNumber > fractionFull {
 		h.length = h.length * growthMultiplication

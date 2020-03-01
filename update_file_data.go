@@ -56,25 +56,25 @@ func readAtByteOffset(offset int64) string {
 	return line
 }
 
-func appendAmountToData(raw string) (int64, error) {
+func appendAmountToData(raw string) error {
 	var err error
 	file, err := os.OpenFile(dataPath, os.O_APPEND|os.O_WRONLY, 0644)
 	defer file.Close()
 	// need to read what is the best practise for handling errors
 	if err != nil {
-		return 0, fmt.Errorf("unable to open file: %w", err)
+		return fmt.Errorf("unable to open file: %w", err)
 	}
 	_, err = file.WriteString(raw + "\n")
 	if err != nil {
-		return 0, fmt.Errorf("unable to write string: %w", err)
+		return fmt.Errorf("unable to write string: %w", err)
 	}
-	fileInto, err := file.Stat()
-	if err != nil {
-		return 0, fmt.Errorf("unable to get byte offset %w", err)
-	}
-	// could also keep track of file size with a var
-	endOfFileOffset := fileInto.Size()
-	return endOfFileOffset, nil
+	// fileInto, err := file.Stat()
+	// if err != nil {
+	// 	return 0, fmt.Errorf("unable to get byte offset %w", err)
+	// }
+	// // could also keep track of file size with a var
+	// endOfFileOffset := fileInto.Size()
+	return nil
 }
 
 func subtractMoneyEvent(projection keyValueStore, name string, subtractAmount int) error {
@@ -92,7 +92,7 @@ func subtractMoneyEvent(projection keyValueStore, name string, subtractAmount in
 		return err
 	}
 	projection.add(name, updatedAmount)
-	_, err = appendAmountToData(raw)
+	err = appendAmountToData(raw)
 	if err != nil {
 		projection.add(name, currentAmount)
 		return fmt.Errorf("unable to persist data to file: %w", err)
@@ -100,8 +100,8 @@ func subtractMoneyEvent(projection keyValueStore, name string, subtractAmount in
 	return nil
 }
 
-func addMoneyEvent(index keyValueStore, name string, addAmount int) error {
-	currentAmount, ok := index.get(name)
+func addMoneyEvent(projection keyValueStore, name string, addAmount int) error {
+	currentAmount, ok := projection.get(name)
 	if !ok {
 		return errors.New("account does not exist")
 	}
@@ -114,28 +114,28 @@ func addMoneyEvent(index keyValueStore, name string, addAmount int) error {
 		return err
 	}
 	updatedAmount := currentAmount + addAmount
-	index.add(name, updatedAmount)
-	_, err = appendAmountToData(raw)
+	projection.add(name, updatedAmount)
+	err = appendAmountToData(raw)
 	if err != nil {
 		// roll back the update
-		index.add(name, currentAmount)
+		projection.add(name, currentAmount)
 		return fmt.Errorf("unable to persist data to file: %w", err)
 	}
 	return nil
 }
 
-func createAccountEvent(account keyValueStore, name string) error {
-	_, ok := account.get(name)
+func createAccountEvent(projection keyValueStore, name string) error {
+	_, ok := projection.get(name)
 	if ok {
 		return fmt.Errorf("Account already exists")
 	}
 	startingValue := 0
-	account.add(name, startingValue)
 	raw, err := encodeLine(name, createEvent, strconv.Itoa(startingValue))
 	if err != nil {
 		return err
 	}
-	_, err = appendAmountToData(raw)
+	projection.add(name, startingValue)
+	err = appendAmountToData(raw)
 	if err != nil {
 		return fmt.Errorf("Unable to get file offset: %w", err)
 	}
