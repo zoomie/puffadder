@@ -20,8 +20,21 @@ type keyValueStore interface {
 	add(key string, value int)
 }
 
-type projectionStore struct {
-	projection keyValueStore
+type reply struct {
+	value string
+	err   error
+}
+
+type command struct {
+	typ           string
+	accountName   string // during transaction this acts as the fromAccount
+	toAccountName string
+	amount        int
+	replyChan     chan reply
+}
+
+type server struct {
+	cmds chan<- command
 }
 
 var dataPath string
@@ -89,56 +102,64 @@ func init() {
 	setupDataFile()
 }
 
-func (p projectionStore) createAccount(w http.ResponseWriter, r *http.Request) {
+func (s server) createAccount(w http.ResponseWriter, r *http.Request) {
 	// need to cove the case when the user already exists in the system
 	accountName := r.FormValue("accountName")
-	err := createAccountEvent(p.projection, accountName)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	replyChan := make(chan reply)
+	s.cmds <- command{typ: createEvent, accountName: accountName, replyChan: replyChan}
+	result := <-replyChan
+	if result.err != nil {
+		http.Error(w, "failed:"+result.err.Error(), http.StatusBadRequest)
 		return
 	}
 	fmt.Fprintln(w, "account created with name:", accountName)
 }
 
-func (p projectionStore) viewCurrentAccount(w http.ResponseWriter, r *http.Request) {
+func (s server) viewCurrentAccount(w http.ResponseWriter, r *http.Request) {
 	accountName := r.FormValue("accountName")
-	amount, ok := p.projection.get(accountName)
-	if !ok {
-		http.Error(w, "Account does not exist", http.StatusBadRequest)
+	replyChan := make(chan reply)
+	s.cmds <- command{typ: viewEvent, accountName: accountName, replyChan: replyChan}
+	result := <-replyChan
+	if result.err != nil {
+		http.Error(w, "failed:"+result.err.Error(), http.StatusBadRequest)
 		return
 	}
-	fmt.Fprintln(w, amount)
+	fmt.Fprintln(w, result.value)
 }
 
-func (p projectionStore) addMoney(w http.ResponseWriter, r *http.Request) {
+func (s server) addMoney(w http.ResponseWriter, r *http.Request) {
 	accountName := r.FormValue("accountName")
 	addAmount, err := strconv.Atoi(r.FormValue("addAmount"))
 	if err != nil {
 		http.Error(w, "addAmount is invalid", http.StatusBadRequest)
 		return
 	}
-	err = addMoneyEvent(p.projection, accountName, addAmount)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	replyChan := make(chan reply)
+	s.cmds <- command{typ: addEvent, accountName: accountName, amount: addAmount, replyChan: replyChan}
+	result := <-replyChan
+	if result.err != nil {
+		http.Error(w, "failed:"+result.err.Error(), http.StatusBadRequest)
 	}
 	fmt.Fprintln(w, "Added money, amount:", addAmount)
 }
 
-func (p projectionStore) withdrawMoney(w http.ResponseWriter, r *http.Request) {
+func (s server) withdrawMoney(w http.ResponseWriter, r *http.Request) {
 	accountName := r.FormValue("accountName")
 	subtractAmount, err := strconv.Atoi(r.FormValue("subtractAmount"))
 	if err != nil {
 		http.Error(w, "invalid subtract value", http.StatusBadRequest)
 	}
-	err = subtractMoneyEvent(p.projection, accountName, subtractAmount)
-	if err != nil {
-		http.Error(w, "not enough money", http.StatusBadRequest)
+	replyChan := make(chan reply)
+	s.cmds <- command{typ: withdrawEvent, accountName: accountName, amount: subtractAmount, replyChan: replyChan}
+	result := <-replyChan
+	if result.err != nil {
+		http.Error(w, "failed:"+result.err.Error(), http.StatusBadRequest)
 		return
 	}
 	fmt.Fprintln(w, "withrdrew:", subtractAmount)
 }
 
-func (p projectionStore) transfer(w http.ResponseWriter, r *http.Request) {
+func (s server) transfer(w http.ResponseWriter, r *http.Request) {
 	fromAccount := r.FormValue("fromAccount")
 	toAccount := r.FormValue("toAccount")
 	transferAmount, err := strconv.Atoi(r.FormValue("transferAmount"))
@@ -146,36 +167,25 @@ func (p projectionStore) transfer(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "transferAmount is not a number", http.StatusBadRequest)
 		return
 	}
-	fromAccountAmount, okFrom := p.projection.get(fromAccount)
-	_, okTo := p.projection.get(toAccount)
-	if !okFrom || !okTo {
-		http.Error(w, "fromAccount and/or toAccount does not exist", http.StatusBadRequest)
-		return
+	replyChan := make(chan reply)
+	s.cmds <- command{typ: transactionEvent, accountName: fromAccount, toAccountName: toAccount, replyChan: replyChan}
+	result := <-replyChan
+	if result.err != nil {
+		http.Error(w, "failed:"+result.err.Error(), http.StatusBadRequest)
 	}
-	if transferAmount > fromAccountAmount {
-		http.Error(w, "fromAccount does not have enouth money", http.StatusBadRequest)
-		return
-	}
-	// add error handling to transactions between accounts
-	err = subtractMoneyEvent(p.projection, fromAccount, transferAmount)
-	if err != nil {
-		// need to think about how to propgate erros here
-		http.Error(w, "unable to subtract amount from account", http.StatusBadRequest)
-		return
-	}
-	_ = addMoneyEvent(p.projection, toAccount, transferAmount)
 	fmt.Fprintln(w, "transaction successful, amount:", transferAmount)
 }
 
 func main() {
 	projection := chooseProjection(algorithmType)
 	createAccountProjection(projection)
-	store := projectionStore{projection: projection}
-	http.HandleFunc("/create-account", store.createAccount)
-	http.HandleFunc("/view-current-account", store.viewCurrentAccount)
-	http.HandleFunc("/add-money", store.addMoney)
-	http.HandleFunc("/withdraw-money", store.withdrawMoney)
-	http.HandleFunc("/transfer", store.transfer)
+	channelStream := setUpChannelStream(projection)
+	s := server{cmds: channelStream}
+	http.HandleFunc("/create-account", s.createAccount)
+	http.HandleFunc("/view-current-account", s.viewCurrentAccount)
+	http.HandleFunc("/add-money", s.addMoney)
+	http.HandleFunc("/withdraw-money", s.withdrawMoney)
+	http.HandleFunc("/transfer", s.transfer)
 
 	log.Fatal(http.ListenAndServe(":8090", nil))
 }

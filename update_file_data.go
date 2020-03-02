@@ -15,6 +15,8 @@ const nameMaxLength = 10
 const createEvent = "create--"
 const addEvent = "add-----"
 const withdrawEvent = "withdraw"
+const transactionEvent = "transact"
+const viewEvent = "view"
 
 func encodeLine(name, eventType, number string) (string, error) {
 	if len(name) > 10 {
@@ -53,27 +55,30 @@ func appendAmountToData(raw string) error {
 	return nil
 }
 
-func subtractMoneyEvent(projection keyValueStore, name string, subtractAmount int) error {
-	currentAmount, ok := projection.get(name)
-	if !ok {
-		return errors.New("name not in db")
+func createAccountEvent(projection keyValueStore, name string) error {
+	_, ok := projection.get(name)
+	if ok {
+		return fmt.Errorf("Account already exists")
 	}
-	updatedAmount := currentAmount - subtractAmount
-	if updatedAmount < 0 {
-		return errors.New("not enough money")
-	}
-	subtractAmountString := strconv.Itoa(subtractAmount)
-	raw, err := encodeLine(name, withdrawEvent, subtractAmountString)
+	startingValue := 0
+	raw, err := encodeLine(name, createEvent, strconv.Itoa(startingValue))
 	if err != nil {
 		return err
 	}
-	projection.add(name, updatedAmount)
+	projection.add(name, startingValue)
 	err = appendAmountToData(raw)
 	if err != nil {
-		projection.add(name, currentAmount)
-		return fmt.Errorf("unable to persist data to file: %w", err)
+		return fmt.Errorf("failed to append to file: %w", err)
 	}
 	return nil
+}
+
+func viewAccountEvent(projection keyValueStore, name string) (int, error) {
+	amount, ok := projection.get(name)
+	if !ok {
+		return 0, fmt.Errorf("account does not exist")
+	}
+	return amount, nil
 }
 
 func addMoneyEvent(projection keyValueStore, name string, addAmount int) error {
@@ -100,20 +105,70 @@ func addMoneyEvent(projection keyValueStore, name string, addAmount int) error {
 	return nil
 }
 
-func createAccountEvent(projection keyValueStore, name string) error {
-	_, ok := projection.get(name)
-	if ok {
-		return fmt.Errorf("Account already exists")
+func subtractMoneyEvent(projection keyValueStore, name string, subtractAmount int) error {
+	currentAmount, ok := projection.get(name)
+	if !ok {
+		return errors.New("name not in db")
 	}
-	startingValue := 0
-	raw, err := encodeLine(name, createEvent, strconv.Itoa(startingValue))
+	updatedAmount := currentAmount - subtractAmount
+	if updatedAmount < 0 {
+		return errors.New("not enough money")
+	}
+	subtractAmountString := strconv.Itoa(subtractAmount)
+	raw, err := encodeLine(name, withdrawEvent, subtractAmountString)
 	if err != nil {
 		return err
 	}
-	projection.add(name, startingValue)
+	projection.add(name, updatedAmount)
 	err = appendAmountToData(raw)
 	if err != nil {
-		return fmt.Errorf("failed to append to file: %w", err)
+		projection.add(name, currentAmount)
+		return fmt.Errorf("unable to persist data to file: %w", err)
 	}
 	return nil
+}
+
+func transactMoney(projection keyValueStore, fromAccount, toAccount string, transferAmount int) error {
+	fromAccountAmount, okFrom := projection.get(fromAccount)
+	_, okTo := projection.get(toAccount)
+	if !okFrom || !okTo {
+		return fmt.Errorf("fromAccount and/or toAccount does not exist")
+	}
+	if transferAmount > fromAccountAmount {
+		return fmt.Errorf("fromAccount does not have enouth money")
+	}
+	// add error handling to transactions between accounts
+	err := subtractMoneyEvent(projection, fromAccount, transferAmount)
+	if err != nil {
+		// need to think about how to propgate erros here
+		return fmt.Errorf("unable to subtract amount from account")
+	}
+	addMoneyEvent(projection, toAccount, transferAmount)
+	return nil
+}
+
+func setUpChannelStream(projection keyValueStore) chan<- command {
+	cmds := make(chan command)
+	go func() {
+		for cmd := range cmds {
+			switch cmd.typ {
+			case createEvent:
+				err := createAccountEvent(projection, cmd.accountName)
+				cmd.replyChan <- reply{err: err}
+			case viewEvent:
+				amount, err := viewAccountEvent(projection, cmd.accountName)
+				cmd.replyChan <- reply{value: strconv.Itoa(amount), err: err}
+			case addEvent:
+				err := addMoneyEvent(projection, cmd.accountName, cmd.amount)
+				cmd.replyChan <- reply{err: err}
+			case withdrawEvent:
+				err := subtractMoneyEvent(projection, cmd.accountName, cmd.amount)
+				cmd.replyChan <- reply{err: err}
+			case transactionEvent:
+				err := transactMoney(projection, cmd.accountName, cmd.toAccountName, cmd.amount)
+				cmd.replyChan <- reply{err: err}
+			}
+		}
+	}()
+	return cmds
 }

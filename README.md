@@ -29,10 +29,6 @@ The main features that allow this are:
 
 * [Structure](#structure)
 
-* [Internals](#internals)
-
-* [Performance](#performance)
-
 
 ---
 
@@ -112,13 +108,3 @@ The file that persists the data to disk and updates the current value using an a
 Tests:
 * [algorithm_test.go](algorithm_test.go)
 * [server_test.go](server_test.go)
-
-## Internals
-
-Show how the project works internally.
-
-## Performance
-
-Use the different algorithms in test.
-
-Also think about setting up concurrency.
