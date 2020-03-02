@@ -39,7 +39,8 @@ type server struct {
 
 var dataPath string
 
-func setupDataFile() {
+func init() {
+	// Setup the datafile
 	// Check if data file exists
 	workingDir, err := os.Getwd()
 	if err != nil {
@@ -96,10 +97,6 @@ func createAccountProjection(projection keyValueStore) {
 		}
 		currentOffset += lineOffSet
 	}
-}
-
-func init() {
-	setupDataFile()
 }
 
 func (s server) createAccount(w http.ResponseWriter, r *http.Request) {
