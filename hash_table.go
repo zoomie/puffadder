@@ -83,6 +83,9 @@ func (h *hashTable) add(key string, value int) {
 }
 
 func (h *hashTable) get(key string) (int, bool) {
+	if h.array == nil {
+		return 0, false
+	}
 	index := hashString(key, h.length)
 	for _, tup := range h.array[index] {
 		if tup.key == key {
