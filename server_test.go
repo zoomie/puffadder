@@ -3,15 +3,17 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path"
+	"strings"
 	"testing"
 )
 
-var baseURL = "localhost:8090/"
+var baseURL = "localhost:8090"
 
-// Find way to use different data file
 func setUp() channelServer {
+	// empty key value store after each test
 	workingDir, err := os.Getwd()
 	if err != nil {
 		panic(err)
@@ -22,16 +24,18 @@ func setUp() channelServer {
 		os.Remove(dataPath)
 	}
 	os.Create(dataPath)
-	// empty key value store after each test
 	store := chooseAlgorithm(algorithmType)
 	channelServer := setUpChannelServer(store)
 	return channelServer
 }
 
 func createAccountSetUp(accountName string) (*httptest.ResponseRecorder, *http.Request) {
-	params := "?accountName=" + accountName
-	url := path.Join(baseURL+"create-account", params)
-	request, _ := http.NewRequest("POST", url, nil)
+	form := url.Values{}
+	form.Add("accountName", accountName)
+	body := strings.NewReader(form.Encode())
+	url := path.Join(baseURL, "create-account")
+	request, _ := http.NewRequest("POST", url, body)
+	request.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	recorder := httptest.NewRecorder()
 	return recorder, request
 }
@@ -62,9 +66,13 @@ func TestViewAccount(t *testing.T) {
 }
 
 func AddSetUp(accountName, amount string) (*httptest.ResponseRecorder, *http.Request) {
-	params := "?accountName=" + accountName + "&addAmount=" + amount
-	fullURL := path.Join(baseURL+"add-money", params)
-	request, _ := http.NewRequest("POST", fullURL, nil)
+	form := url.Values{}
+	form.Add("accountName", accountName)
+	form.Add("addAmount", amount)
+	body := strings.NewReader(form.Encode())
+	fullURL := path.Join(baseURL, "add-money")
+	request, _ := http.NewRequest("POST", fullURL, body)
+	request.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	recorder := httptest.NewRecorder()
 	return recorder, request
 }
@@ -82,9 +90,13 @@ func TestAdd(t *testing.T) {
 }
 
 func withdrawSetUp(accountName, amount string) (*httptest.ResponseRecorder, *http.Request) {
-	params := "?accountName=" + accountName + "&subtractAmount=" + amount
-	fullURL := path.Join(baseURL+"withdraw-money", params)
-	request, _ := http.NewRequest("POST", fullURL, nil)
+	form := url.Values{}
+	form.Add("accountName", accountName)
+	form.Add("subtractAmount", amount)
+	body := strings.NewReader(form.Encode())
+	fullURL := path.Join(baseURL, "withdraw-money")
+	request, _ := http.NewRequest("POST", fullURL, body)
+	request.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	recorder := httptest.NewRecorder()
 	return recorder, request
 }
@@ -112,10 +124,16 @@ func TestTransfer(t *testing.T) {
 	toAccount := "paul"
 	channelSrv.createAccount(createAccountSetUp(toAccount))
 
-	params := "?fromAccount=" + fromAccountName + "&toAccount=" + toAccount + "&transferAmount=5"
-	fullURL := path.Join(baseURL+"transfer", params)
-	request, _ := http.NewRequest("GET", fullURL, nil)
+	form := url.Values{}
+	form.Add("fromAccount", fromAccountName)
+	form.Add("toAccount", toAccount)
+	form.Add("transferAmount", "5")
+	body := strings.NewReader(form.Encode())
+	fullURL := path.Join(baseURL, "transfer")
+	request, _ := http.NewRequest("POST", fullURL, body)
+	request.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	recorder := httptest.NewRecorder()
+
 	channelSrv.transfer(recorder, request)
 	response := recorder.Result()
 	if response.StatusCode != http.StatusOK {

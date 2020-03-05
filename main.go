@@ -158,13 +158,13 @@ func setUpChannelServer(store keyValueStore) channelServer {
 }
 
 func (c channelServer) createAccount(w http.ResponseWriter, r *http.Request) {
-	// need to cove the case when the user already exists in the system
-	accountName := r.FormValue("accountName")
+	r.ParseForm()
+	accountName := r.Form.Get("accountName")
 	replyChan := make(chan reply)
 	c.createChan <- createCommand{accountName, replyChan}
 	result := <-replyChan
 	if result.err != nil {
-		http.Error(w, "failed:"+result.err.Error(), http.StatusBadRequest)
+		http.Error(w, "failed: "+result.err.Error(), http.StatusBadRequest)
 		return
 	}
 	fmt.Fprintln(w, "account created with name:", accountName)
@@ -176,15 +176,16 @@ func (c channelServer) viewCurrentAccount(w http.ResponseWriter, r *http.Request
 	c.viewChan <- viewCommand{accountName, replyChan}
 	result := <-replyChan
 	if result.err != nil {
-		http.Error(w, "failed:"+result.err.Error(), http.StatusBadRequest)
+		http.Error(w, "failed: "+result.err.Error(), http.StatusBadRequest)
 		return
 	}
 	fmt.Fprintln(w, result.value)
 }
 
 func (c channelServer) addMoney(w http.ResponseWriter, r *http.Request) {
-	accountName := r.FormValue("accountName")
-	addAmount, err := strconv.Atoi(r.FormValue("addAmount"))
+	r.ParseForm()
+	accountName := r.Form.Get("accountName")
+	addAmount, err := strconv.Atoi(r.Form.Get("addAmount"))
 	if err != nil {
 		http.Error(w, "addAmount is invalid", http.StatusBadRequest)
 		return
@@ -195,12 +196,13 @@ func (c channelServer) addMoney(w http.ResponseWriter, r *http.Request) {
 	if result.err != nil {
 		http.Error(w, "failed:"+result.err.Error(), http.StatusBadRequest)
 	}
-	fmt.Fprintln(w, "Added money, amount:", addAmount)
+	fmt.Fprintln(w, "added money, amount:", addAmount)
 }
 
 func (c channelServer) withdrawMoney(w http.ResponseWriter, r *http.Request) {
-	accountName := r.FormValue("accountName")
-	subtractAmount, err := strconv.Atoi(r.FormValue("subtractAmount"))
+	r.ParseForm()
+	accountName := r.Form.Get("accountName")
+	subtractAmount, err := strconv.Atoi(r.Form.Get("subtractAmount"))
 	if err != nil {
 		http.Error(w, "invalid subtract value", http.StatusBadRequest)
 	}
@@ -208,16 +210,17 @@ func (c channelServer) withdrawMoney(w http.ResponseWriter, r *http.Request) {
 	c.withdrawChan <- withdrawCommand{accountName, subtractAmount, replyChan}
 	result := <-replyChan
 	if result.err != nil {
-		http.Error(w, "failed:"+result.err.Error(), http.StatusBadRequest)
+		http.Error(w, "failed: "+result.err.Error(), http.StatusBadRequest)
 		return
 	}
-	fmt.Fprintln(w, "withrdrew:", subtractAmount)
+	fmt.Fprintln(w, "withrdrew: ", subtractAmount)
 }
 
 func (c channelServer) transfer(w http.ResponseWriter, r *http.Request) {
-	fromAccount := r.FormValue("fromAccount")
-	toAccount := r.FormValue("toAccount")
-	transferAmount, err := strconv.Atoi(r.FormValue("transferAmount"))
+	r.ParseForm()
+	fromAccount := r.Form.Get("fromAccount")
+	toAccount := r.Form.Get("toAccount")
+	transferAmount, err := strconv.Atoi(r.Form.Get("transferAmount"))
 	if err != nil {
 		http.Error(w, "transferAmount is not a number", http.StatusBadRequest)
 		return
@@ -228,7 +231,7 @@ func (c channelServer) transfer(w http.ResponseWriter, r *http.Request) {
 	if result.err != nil {
 		http.Error(w, "failed:"+result.err.Error(), http.StatusBadRequest)
 	}
-	fmt.Fprintln(w, "transaction successful, amount:", transferAmount)
+	fmt.Fprintln(w, "transaction successful, amount: ", transferAmount)
 }
 
 func main() {
