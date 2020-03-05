@@ -61,13 +61,13 @@ go build .
 Run the http server in [main.go](main.go), open the data.puff file and run each of the following commands:
 
 ```sh
-curl 'localhost:8090/create-account?accountName=joe'
+curl 'localhost:8090/create-account' -d 'accountName=joe'
 curl 'localhost:8090/view-current-account?accountName=joe' 
-curl 'localhost:8090/add-money?accountName=joe&addAmount=100'
-curl 'localhost:8090/withdraw-money?accountName=joe&subtractAmount=10'
+curl 'localhost:8090/add-money' -d 'accountName=joe&addAmount=100'
+curl 'localhost:8090/withdraw-money' -d 'accountName=joe&subtractAmount=10'
 
-curl 'localhost:8090/create-account?accountName=john' 
-curl 'localhost:8090/transfer?fromAccount=joe&toAccount=john&transferAmount=10'
+curl 'localhost:8090/create-account' -d 'accountName=john' 
+curl 'localhost:8090/transfer' -d 'fromAccount=joe&toAccount=john&transferAmount=10'
 ```
 
 The above commands will produce the following data.puff file.
