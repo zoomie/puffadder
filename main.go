@@ -10,10 +10,15 @@ import (
 	"strconv"
 )
 
-// The acciont projection is stored in a keyValueStore interface.
-// The options are: hashTable, orderedArray, binaryTree.
-const algorithmType = "binaryTree" // default
-const lineOffSet = 31
+const (
+	// The options are: hashTable, orderedArray, binaryTree.
+	algorithmType = "hashTable" // default
+	lineOffSet    = 31
+)
+
+var (
+	dataPath string
+)
 
 type keyValueStore interface {
 	get(key string) (int, bool)
@@ -25,19 +30,41 @@ type reply struct {
 	err   error
 }
 
-type command struct {
-	typ           string
-	accountName   string // during transaction this acts as the fromAccount
-	toAccountName string
-	amount        int
-	replyChan     chan reply
+type createCommand struct {
+	accountName string
+	replyChan   chan reply
 }
 
-type server struct {
-	cmds chan<- command
+type viewCommand struct {
+	accountName string
+	replyChan   chan reply
 }
 
-var dataPath string
+type addCommand struct {
+	accountName string
+	amount      int
+	replyChan   chan reply
+}
+type withdrawCommand struct {
+	accountName string
+	amount      int
+	replyChan   chan reply
+}
+
+type transactionCommand struct {
+	toAccountName   string
+	fromAccountName string
+	amount          int
+	replyChan       chan reply
+}
+
+type channelServer struct {
+	createChan      chan<- createCommand
+	viewChan        chan<- viewCommand
+	addChan         chan<- addCommand
+	withdrawChan    chan<- withdrawCommand
+	transactionChan chan<- transactionCommand
+}
 
 func init() {
 	// Setup the datafile
@@ -60,7 +87,7 @@ func init() {
 
 }
 
-func chooseProjection(algType string) keyValueStore {
+func chooseAlgorithm(algType string) keyValueStore {
 	if algType == "hashTable" {
 		return &hashTable{}
 	} else if algType == "orderedArray" {
@@ -70,7 +97,7 @@ func chooseProjection(algType string) keyValueStore {
 	}
 }
 
-func createAccountProjection(projection keyValueStore) {
+func createAccountStore(store keyValueStore) {
 	file, _ := os.Open(dataPath)
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
@@ -79,16 +106,16 @@ func createAccountProjection(projection keyValueStore) {
 		line := scanner.Text()
 		name, eventType, changeAmount, err := decodeLine(line)
 		if eventType == createEvent {
-			projection.add(name, 0)
+			store.add(name, 0)
 		} else if eventType == addEvent {
-			currentAmount, _ := projection.get(name)
+			currentAmount, _ := store.get(name)
 			updatedAmount := currentAmount + changeAmount
-			projection.add(name, updatedAmount)
+			store.add(name, updatedAmount)
 
 		} else if eventType == withdrawEvent {
-			currentAmount, _ := projection.get(name)
+			currentAmount, _ := store.get(name)
 			updatedAmount := currentAmount - changeAmount
-			projection.add(name, updatedAmount)
+			store.add(name, updatedAmount)
 		} else {
 			panic(fmt.Errorf("incorrect event"))
 		}
@@ -99,11 +126,42 @@ func createAccountProjection(projection keyValueStore) {
 	}
 }
 
-func (s server) createAccount(w http.ResponseWriter, r *http.Request) {
+func setUpChannelServer(store keyValueStore) channelServer {
+	createChan := make(chan createCommand)
+	viewChan := make(chan viewCommand)
+	addChan := make(chan addCommand)
+	withdrawChan := make(chan withdrawCommand)
+	transactionChan := make(chan transactionCommand)
+	go func() {
+		for {
+			select {
+			case createCmd := <-createChan:
+				err := performCreate(store, createCmd.accountName)
+				createCmd.replyChan <- reply{err: err}
+			case veiwCmd := <-viewChan:
+				amount, err := performView(store, veiwCmd.accountName)
+				veiwCmd.replyChan <- reply{value: strconv.Itoa(amount), err: err}
+			case addCmd := <-addChan:
+				err := performAdd(store, addCmd.accountName, addCmd.amount)
+				addCmd.replyChan <- reply{err: err}
+			case withdrawCmd := <-withdrawChan:
+				err := performSubtract(store, withdrawCmd.accountName, withdrawCmd.amount)
+				withdrawCmd.replyChan <- reply{err: err}
+			case transactionCmd := <-transactionChan:
+				err := performTransaction(store, transactionCmd.fromAccountName,
+					transactionCmd.toAccountName, transactionCmd.amount)
+				transactionCmd.replyChan <- reply{err: err}
+			}
+		}
+	}()
+	return channelServer{createChan, viewChan, addChan, withdrawChan, transactionChan}
+}
+
+func (c channelServer) createAccount(w http.ResponseWriter, r *http.Request) {
 	// need to cove the case when the user already exists in the system
 	accountName := r.FormValue("accountName")
 	replyChan := make(chan reply)
-	s.cmds <- command{typ: createEvent, accountName: accountName, replyChan: replyChan}
+	c.createChan <- createCommand{accountName, replyChan}
 	result := <-replyChan
 	if result.err != nil {
 		http.Error(w, "failed:"+result.err.Error(), http.StatusBadRequest)
@@ -112,10 +170,10 @@ func (s server) createAccount(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, "account created with name:", accountName)
 }
 
-func (s server) viewCurrentAccount(w http.ResponseWriter, r *http.Request) {
+func (c channelServer) viewCurrentAccount(w http.ResponseWriter, r *http.Request) {
 	accountName := r.FormValue("accountName")
 	replyChan := make(chan reply)
-	s.cmds <- command{typ: viewEvent, accountName: accountName, replyChan: replyChan}
+	c.viewChan <- viewCommand{accountName, replyChan}
 	result := <-replyChan
 	if result.err != nil {
 		http.Error(w, "failed:"+result.err.Error(), http.StatusBadRequest)
@@ -124,7 +182,7 @@ func (s server) viewCurrentAccount(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, result.value)
 }
 
-func (s server) addMoney(w http.ResponseWriter, r *http.Request) {
+func (c channelServer) addMoney(w http.ResponseWriter, r *http.Request) {
 	accountName := r.FormValue("accountName")
 	addAmount, err := strconv.Atoi(r.FormValue("addAmount"))
 	if err != nil {
@@ -132,7 +190,7 @@ func (s server) addMoney(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	replyChan := make(chan reply)
-	s.cmds <- command{typ: addEvent, accountName: accountName, amount: addAmount, replyChan: replyChan}
+	c.addChan <- addCommand{accountName, addAmount, replyChan}
 	result := <-replyChan
 	if result.err != nil {
 		http.Error(w, "failed:"+result.err.Error(), http.StatusBadRequest)
@@ -140,14 +198,14 @@ func (s server) addMoney(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, "Added money, amount:", addAmount)
 }
 
-func (s server) withdrawMoney(w http.ResponseWriter, r *http.Request) {
+func (c channelServer) withdrawMoney(w http.ResponseWriter, r *http.Request) {
 	accountName := r.FormValue("accountName")
 	subtractAmount, err := strconv.Atoi(r.FormValue("subtractAmount"))
 	if err != nil {
 		http.Error(w, "invalid subtract value", http.StatusBadRequest)
 	}
 	replyChan := make(chan reply)
-	s.cmds <- command{typ: withdrawEvent, accountName: accountName, amount: subtractAmount, replyChan: replyChan}
+	c.withdrawChan <- withdrawCommand{accountName, subtractAmount, replyChan}
 	result := <-replyChan
 	if result.err != nil {
 		http.Error(w, "failed:"+result.err.Error(), http.StatusBadRequest)
@@ -156,7 +214,7 @@ func (s server) withdrawMoney(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, "withrdrew:", subtractAmount)
 }
 
-func (s server) transfer(w http.ResponseWriter, r *http.Request) {
+func (c channelServer) transfer(w http.ResponseWriter, r *http.Request) {
 	fromAccount := r.FormValue("fromAccount")
 	toAccount := r.FormValue("toAccount")
 	transferAmount, err := strconv.Atoi(r.FormValue("transferAmount"))
@@ -165,7 +223,7 @@ func (s server) transfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	replyChan := make(chan reply)
-	s.cmds <- command{typ: transactionEvent, accountName: fromAccount, toAccountName: toAccount, replyChan: replyChan}
+	c.transactionChan <- transactionCommand{toAccount, fromAccount, transferAmount, replyChan}
 	result := <-replyChan
 	if result.err != nil {
 		http.Error(w, "failed:"+result.err.Error(), http.StatusBadRequest)
@@ -174,15 +232,14 @@ func (s server) transfer(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	projection := chooseProjection(algorithmType)
-	createAccountProjection(projection)
-	channelStream := setUpChannelStream(projection)
-	s := server{cmds: channelStream}
-	http.HandleFunc("/create-account", s.createAccount)
-	http.HandleFunc("/view-current-account", s.viewCurrentAccount)
-	http.HandleFunc("/add-money", s.addMoney)
-	http.HandleFunc("/withdraw-money", s.withdrawMoney)
-	http.HandleFunc("/transfer", s.transfer)
+	store := chooseAlgorithm(algorithmType)
+	createAccountStore(store)
+	channelSrv := setUpChannelServer(store)
+	http.HandleFunc("/create-account", channelSrv.createAccount)
+	http.HandleFunc("/view-current-account", channelSrv.viewCurrentAccount)
+	http.HandleFunc("/add-money", channelSrv.addMoney)
+	http.HandleFunc("/withdraw-money", channelSrv.withdrawMoney)
+	http.HandleFunc("/transfer", channelSrv.transfer)
 
 	log.Fatal(http.ListenAndServe(":8090", nil))
 }

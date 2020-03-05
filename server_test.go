@@ -11,8 +11,7 @@ import (
 var baseURL = "localhost:8090/"
 
 // Find way to use different data file
-// I could make the datafile and projection local vars?
-func setUp() server {
+func setUp() channelServer {
 	workingDir, err := os.Getwd()
 	if err != nil {
 		panic(err)
@@ -24,9 +23,9 @@ func setUp() server {
 	}
 	os.Create(dataPath)
 	// empty key value store after each test
-	projection := chooseProjection(algorithmType)
-	channelStream := setUpChannelStream(projection)
-	return server{cmds: channelStream}
+	store := chooseAlgorithm(algorithmType)
+	channelServer := setUpChannelServer(store)
+	return channelServer
 }
 
 func createAccountSetUp(accountName string) (*httptest.ResponseRecorder, *http.Request) {
@@ -38,9 +37,9 @@ func createAccountSetUp(accountName string) (*httptest.ResponseRecorder, *http.R
 }
 
 func TestCreateAccount(t *testing.T) {
-	s := setUp()
+	channelSrv := setUp()
 	recorder, request := createAccountSetUp("joe")
-	s.createAccount(recorder, request)
+	channelSrv.createAccount(recorder, request)
 	response := recorder.Result()
 	if response.StatusCode != http.StatusOK {
 		t.Errorf("Creating account failed")
@@ -48,14 +47,14 @@ func TestCreateAccount(t *testing.T) {
 }
 
 func TestViewAccount(t *testing.T) {
-	s := setUp()
-	s.createAccount(createAccountSetUp("joe"))
+	channelSrv := setUp()
+	channelSrv.createAccount(createAccountSetUp("joe"))
 
 	params := "?accountName=joe"
 	fullURL := path.Join(baseURL+"view-current-account", params)
 	request, _ := http.NewRequest("GET", fullURL, nil)
 	recorder := httptest.NewRecorder()
-	s.viewCurrentAccount(recorder, request)
+	channelSrv.viewCurrentAccount(recorder, request)
 	response := recorder.Result()
 	if response.StatusCode != http.StatusOK {
 		t.Errorf("View account failed")
@@ -71,11 +70,11 @@ func AddSetUp(accountName, amount string) (*httptest.ResponseRecorder, *http.Req
 }
 
 func TestAdd(t *testing.T) {
-	s := setUp()
-	s.createAccount(createAccountSetUp("joe"))
+	channelSrv := setUp()
+	channelSrv.createAccount(createAccountSetUp("joe"))
 
 	recorder, request := AddSetUp("joe", "10")
-	s.addMoney(recorder, request)
+	channelSrv.addMoney(recorder, request)
 	response := recorder.Result()
 	if response.StatusCode != http.StatusOK {
 		t.Errorf("Adding money failed")
@@ -91,13 +90,13 @@ func withdrawSetUp(accountName, amount string) (*httptest.ResponseRecorder, *htt
 }
 
 func TestWithdraw(t *testing.T) {
-	s := setUp()
+	channelSrv := setUp()
 	accountName := "joe"
-	s.createAccount(createAccountSetUp(accountName))
-	s.addMoney(AddSetUp(accountName, "10"))
+	channelSrv.createAccount(createAccountSetUp(accountName))
+	channelSrv.addMoney(AddSetUp(accountName, "10"))
 
 	recorder, request := withdrawSetUp(accountName, "5")
-	s.withdrawMoney(recorder, request)
+	channelSrv.withdrawMoney(recorder, request)
 	response := recorder.Result()
 	if response.StatusCode != http.StatusOK {
 		t.Errorf("Test withdraw failed")
@@ -105,19 +104,19 @@ func TestWithdraw(t *testing.T) {
 }
 
 func TestTransfer(t *testing.T) {
-	s := setUp()
+	channelSrv := setUp()
 	fromAccountName := "joe"
-	s.createAccount(createAccountSetUp(fromAccountName))
-	s.addMoney(AddSetUp(fromAccountName, "10"))
+	channelSrv.createAccount(createAccountSetUp(fromAccountName))
+	channelSrv.addMoney(AddSetUp(fromAccountName, "10"))
 
 	toAccount := "paul"
-	s.createAccount(createAccountSetUp(toAccount))
+	channelSrv.createAccount(createAccountSetUp(toAccount))
 
 	params := "?fromAccount=" + fromAccountName + "&toAccount=" + toAccount + "&transferAmount=5"
 	fullURL := path.Join(baseURL+"transfer", params)
 	request, _ := http.NewRequest("GET", fullURL, nil)
 	recorder := httptest.NewRecorder()
-	s.transfer(recorder, request)
+	channelSrv.transfer(recorder, request)
 	response := recorder.Result()
 	if response.StatusCode != http.StatusOK {
 		t.Errorf("Creating task failed")

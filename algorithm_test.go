@@ -16,7 +16,7 @@ func getInputValues(numberTests int) map[string]int {
 }
 
 func TestAlgorithms(t *testing.T) {
-	testCases := getInputValues(100)
+	testCases := getInputValues(1000)
 	algsToTest := []keyValueStore{
 		&hashTable{},
 		&orderedArray{},
