@@ -86,17 +86,20 @@ Test example of how to create an account in code, can be found in [server_test.g
 ```go
 
 func createAccountSetUp(accountName string) (*httptest.ResponseRecorder, *http.Request) {
-	params := "?accountName=" + accountName
-	url := path.Join(baseURL+"create-account", params)
-	request, _ := http.NewRequest("POST", url, nil)
+	form := url.Values{}
+	form.Add("accountName", accountName)
+	body := strings.NewReader(form.Encode())
+	url := path.Join(baseURL, "create-account")
+	request, _ := http.NewRequest("POST", url, body)
+	request.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	recorder := httptest.NewRecorder()
 	return recorder, request
 }
 
 func TestCreateAccount(t *testing.T) {
-	setUp()
+	channelSrv := setUp()
 	recorder, request := createAccountSetUp("joe")
-	createAccount(recorder, request)
+	channelSrv.createAccount(recorder, request)
 	response := recorder.Result()
 	if response.StatusCode != http.StatusOK {
 		t.Errorf("Creating account failed")
